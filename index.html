@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>工程師排班表</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-tap-highlight-color: transparent; }
+        .animate-in { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
+        /* 優化手機滾動 */
+        html, body { overscroll-behavior-y: none; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // --- 圖示組件 ---
+        const Icon = ({ path, className, size = 20, onClick }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} onClick={onClick} style={{cursor: onClick ? 'pointer' : 'default'}}>
+                {path}
+            </svg>
+        );
+        const Icons = {
+            Calendar: (p) => <Icon {...p} path={<><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></>} />,
+            Edit2: (p) => <Icon {...p} path={<><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></>} />,
+            Briefcase: (p) => <Icon {...p} path={<><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></>} />,
+            Coffee: (p) => <Icon {...p} path={<><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></>} />,
+            ChevronLeft: (p) => <Icon {...p} path={<polyline points="15 18 9 12 15 6"></polyline>} />,
+            ChevronRight: (p) => <Icon {...p} path={<polyline points="9 18 15 12 9 6"></polyline>} />,
+            RotateCcw: (p) => <Icon {...p} path={<><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></>} />,
+            Plus: (p) => <Icon {...p} path={<><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></>} />,
+            Trash2: (p) => <Icon {...p} path={<><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></>} />
+        };
+
+        // ==========================================
+        // ▼▼▼ 請將您匯出的 JSON 資料貼在下面 ▼▼▼
+        // 格式範例： const DEFAULT_DATA = [{"id":1, "name":"大明", "startDateStr":"2023-10-20"}, ... ];
+        
+        const DEFAULT_DATA = [
+            { id: 1, name: '工程師 A', startDateStr: '' },
+            { id: 2, name: '工程師 B', startDateStr: '' },
+            { id: 3, name: '工程師 C', startDateStr: '' },
+            { id: 4, name: '工程師 D', startDateStr: '' },
+        ];
+        
+        // ▲▲▲ 請將您的資料貼在上面取代掉預設值 ▲▲▲
+        // ==========================================
+
+        const EngineerShiftTracker = () => {
+            // 初始化：優先讀取 LocalStorage，如果沒有，就使用上面的 DEFAULT_DATA
+            const [engineers, setEngineers] = React.useState(() => {
+                const saved = localStorage.getItem('shift_engineers_gh_v1');
+                if (saved) {
+                    try { return JSON.parse(saved); } catch (e) { console.error(e); }
+                }
+                // 如果是第一次開啟，或是主管開啟，就會讀取寫死在程式碼裡的 DEFAULT_DATA
+                return DEFAULT_DATA;
+            });
+
+            const [isEditing, setIsEditing] = React.useState(null);
+            const [tempName, setTempName] = React.useState('');
+            const [deleteConfirmId, setDeleteConfirmId] = React.useState(null);
+            const [viewDate, setViewDate] = React.useState(new Date());
+
+            const currentYear = new Date().getFullYear();
+            const [selYear, setSelYear] = React.useState(currentYear);
+            const [selMonth, setSelMonth] = React.useState(1);
+            const [selDay, setSelDay] = React.useState(1);
+
+            React.useEffect(() => {
+                localStorage.setItem('shift_engineers_gh_v1', JSON.stringify(engineers));
+            }, [engineers]);
+
+            const parseDateString = (dateStr) => {
+                if (!dateStr) return null;
+                const [y, m, d] = dateStr.split('-').map(Number);
+                return new Date(y, m - 1, d);
+            };
+
+            const handleAddEngineer = () => {
+                const newId = Date.now();
+                setEngineers([...engineers, { id: newId, name: `新工程師`, startDateStr: '' }]);
+                setIsEditing(newId);
+                setDeleteConfirmId(null);
+                setTempName('新工程師');
+                const today = new Date();
+                setSelYear(today.getFullYear());
+                setSelMonth(today.getMonth() + 1);
+                setSelDay(today.getDate());
+            };
+
+            const executeDelete = (id) => {
+                setEngineers(engineers.filter(eng => eng.id !== id));
+                setIsEditing(null);
+                setDeleteConfirmId(null);
+            };
+
+            const handleEditClick = (eng) => {
+                setIsEditing(eng.id);
+                setDeleteConfirmId(null);
+                setTempName(eng.name);
+                if (eng.startDateStr) {
+                    const [y, m, d] = eng.startDateStr.split('-').map(Number);
+                    setSelYear(y);
+                    setSelMonth(m);
+                    setSelDay(d);
+                } else {
+                    const today = new Date();
+                    setSelYear(today.getFullYear());
+                    setSelMonth(today.getMonth() + 1);
+                    setSelDay(today.getDate());
+                }
+            };
+
+            const handleSave = (id) => {
+                const y = selYear;
+                const m = String(selMonth).padStart(2, '0');
+                const d = String(selDay).padStart(2, '0');
+                const newDateStr = `${y}-${m}-${d}`;
+                setEngineers(engineers.map(eng => eng.id === id ? { ...eng, name: tempName, startDateStr: newDateStr } : eng));
+                setIsEditing(null);
+                setDeleteConfirmId(null);
+            };
+
+            const getShiftStatus = (baseDateStr, targetDate) => {
+                if (!baseDateStr) return null;
+                const start = parseDateString(baseDateStr);
+                const target = new Date(targetDate);
+                target.setHours(0, 0, 0, 0); 
+                const diffTime = target.getTime() - start.getTime();
+                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                const cycleDay = ((diffDays % 6) + 6) % 6;
+                return cycleDay < 4 
+                    ? { type: 'work', day: cycleDay + 1, label: `上班 D${cycleDay + 1}` }
+                    : { type: 'off', day: cycleDay - 3, label: `休假 D${cycleDay - 3}` };
+            };
+
+            const getCurrentWeekDays = () => {
+                const start = new Date(viewDate);
+                const day = start.getDay(); 
+                start.setDate(start.getDate() - day);
+                const days = [];
+                for (let i = 0; i < 7; i++) {
+                    const d = new Date(start);
+                    d.setDate(start.getDate() + i);
+                    days.push(d);
+                }
+                return days;
+            };
+
+            const weekDays = getCurrentWeekDays();
+            const weekRangeStr = `${weekDays[0].getMonth()+1}/${weekDays[0].getDate()} ~ ${weekDays[6].getMonth()+1}/${weekDays[6].getDate()}`;
+            const changeWeek = (offset) => { const newDate = new Date(viewDate); newDate.setDate(newDate.getDate() + (offset * 7)); setViewDate(newDate); };
+            const resetToToday = () => setViewDate(new Date());
+            const today = new Date();
+            const isToday = (d) => d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+            
+            const years = [currentYear - 1, currentYear, currentYear + 1];
+            const months = Array.from({length: 12}, (_, i) => i + 1);
+            const daysInMonth = new Date(selYear, selMonth, 0).getDate();
+            const days = Array.from({length: daysInMonth}, (_, i) => i + 1);
+
+            return (
+                <div className="min-h-screen p-4 pb-24 max-w-md mx-auto space-y-4">
+                    <div className="bg-white p-4 rounded-2xl shadow-sm sticky top-0 z-20 border-b border-slate-100">
+                        <div className="flex justify-between items-center mb-3">
+                            <h1 className="text-lg font-bold flex items-center gap-2 text-slate-800">
+                                <Icons.Calendar className="text-blue-600" /> 排班表 ({engineers.length}人)
+                            </h1>
+                            <button onClick={resetToToday} className="text-xs flex items-center gap-1 bg-slate-100 px-2 py-1 rounded-md text-slate-600 hover:bg-slate-200 active:scale-95 transition-transform"><Icons.RotateCcw size={12}/> 今天</button>
+                        </div>
+
+                        <div className="flex items-center justify-between bg-slate-50 rounded-xl p-1 select-none">
+                            <button onClick={() => changeWeek(-1)} className="p-2 hover:bg-white rounded-lg text-slate-500 hover:text-blue-600"><Icons.ChevronLeft /></button>
+                            <div className="text-sm font-bold text-slate-700 font-mono">{weekRangeStr}</div>
+                            <button onClick={() => changeWeek(1)} className="p-2 hover:bg-white rounded-lg text-slate-500 hover:text-blue-600"><Icons.ChevronRight /></button>
+                        </div>
+                    </div>
+
+                    <div className="grid gap-3">
+                        {engineers.map(eng => {
+                            const todayStatus = getShiftStatus(eng.startDateStr, today);
+                            const isTodayWork = todayStatus?.type === 'work';
+
+                            if (isEditing === eng.id) {
+                                return (
+                                    <div key={eng.id} className="bg-white p-5 rounded-2xl shadow-xl border-2 border-blue-500 animate-in">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h3 className="font-bold text-lg flex items-center gap-2 text-blue-600"><Icons.Edit2 size={18}/> 設定資料</h3>
+                                            {deleteConfirmId === eng.id ? (
+                                                <div className="flex items-center gap-2 bg-red-50 p-1 pr-1.5 rounded-lg border border-red-200">
+                                                    <span className="text-xs text-red-600 font-bold ml-1">確定刪除?</span>
+                                                    <button onClick={() => executeDelete(eng.id)} className="bg-red-500 text-white text-xs px-2 py-1 rounded">是</button>
+                                                    <button onClick={() => setDeleteConfirmId(null)} className="bg-white text-slate-500 text-xs px-2 py-1 rounded border">否</button>
+                                                </div>
+                                            ) : (
+                                                <button onClick={() => setDeleteConfirmId(eng.id)} className="text-red-400 hover:text-red-600 p-2 hover:bg-red-50 rounded-full"><Icons.Trash2 size={18}/></button>
+                                            )}
+                                        </div>
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">姓名</label>
+                                                <input type="text" value={tempName} onChange={(e) => setTempName(e.target.value)} className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg focus:border-blue-500 outline-none"/>
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">最近一次「第一天上班」</label>
+                                                <div className="flex gap-2">
+                                                    <select value={selYear} onChange={(e)=>setSelYear(Number(e.target.value))} className="flex-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-center outline-none">{years.map(y=><option key={y} value={y}>{y}</option>)}</select>
+                                                    <select value={selMonth} onChange={(e)=>setSelMonth(Number(e.target.value))} className="flex-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-center outline-none">{months.map(m=><option key={m} value={m}>{m}月</option>)}</select>
+                                                    <select value={selDay} onChange={(e)=>setSelDay(Number(e.target.value))} className="flex-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-center outline-none">{days.map(d=><option key={d} value={d}>{d}日</option>)}</select>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2 pt-2">
+                                                <button onClick={() => handleSave(eng.id)} className="flex-1 bg-blue-600 text-white py-2 rounded-lg font-bold shadow-md">儲存</button>
+                                                <button onClick={() => setIsEditing(null)} className="flex-1 bg-white border border-slate-200 text-slate-500 py-2 rounded-lg font-bold">取消</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            }
+
+                            return (
+                                <div key={eng.id} className="bg-white rounded-2xl shadow-sm overflow-hidden border border-slate-100">
+                                    <div className="p-4 flex items-center justify-between bg-white relative z-10">
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <h2 className="text-lg font-bold text-slate-900">{eng.name}</h2>
+                                                <button onClick={() => handleEditClick(eng)} className="p-1.5 rounded-full text-slate-300 hover:text-blue-600 hover:bg-blue-50"><Icons.Edit2 size={16} /></button>
+                                            </div>
+                                            {!eng.startDateStr ? (
+                                                <span className="text-xs text-slate-400">未設定 (請點擊筆設定)</span>
+                                            ) : (
+                                                <div className={`mt-1 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-bold ${isTodayWork ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
+                                                    {isTodayWork ? <Icons.Briefcase size={12}/> : <Icons.Coffee size={12}/>} 今天 {todayStatus.label}
+                                                </div>
+                                            )}
+                                        </div>
+                                        {eng.startDateStr && (
+                                            <div className={`w-12 h-12 rounded-full flex flex-col items-center justify-center border-4 ${isTodayWork ? 'border-emerald-100 bg-emerald-50 text-emerald-600' : 'border-orange-100 bg-orange-50 text-orange-500'}`}>
+                                                <span className="text-lg font-black leading-none">{todayStatus.day}</span>
+                                                <span className="text-[8px] font-bold leading-none mt-0.5">{isTodayWork?'上班':'休假'}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    {eng.startDateStr && (
+                                        <div className="bg-slate-50 px-2 py-3 border-t border-slate-100">
+                                            <div className="grid grid-cols-7 gap-1 mb-2 text-center">
+                                                {['日', '一', '二', '三', '四', '五', '六'].map((day, i) => (
+                                                    <div key={i} className={`text-[10px] font-bold ${i===0 || i===6 ? 'text-red-400':'text-slate-400'}`}>{day}</div>
+                                                ))}
+                                            </div>
+                                            <div className="grid grid-cols-7 gap-1">
+                                                {weekDays.map((dateObj, i) => {
+                                                    const status = getShiftStatus(eng.startDateStr, dateObj);
+                                                    const isWork = status?.type === 'work';
+                                                    const isCurrentDay = isToday(dateObj);
+                                                    return (
+                                                        <div key={i} className={`flex flex-col items-center gap-1 p-1 rounded-lg ${isCurrentDay ? 'bg-white shadow-sm ring-1 ring-blue-200' : ''}`}>
+                                                            <span className={`text-[10px] font-mono leading-none ${isCurrentDay ? 'text-blue-600 font-bold' : 'text-slate-500'}`}>{dateObj.getMonth() + 1}/{dateObj.getDate()}</span>
+                                                            <div className={`w-full h-8 rounded-md flex items-center justify-center text-[10px] font-bold text-white ${isWork ? 'bg-emerald-400' : 'bg-orange-300'}`}>{isWork ? '班' : '休'}</div>
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                    <button onClick={handleAddEngineer} className="w-full py-4 rounded-2xl border-2 border-dashed border-slate-300 text-slate-500 font-bold hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 flex items-center justify-center gap-2"><Icons.Plus size={20} /> 新增工程師</button>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<EngineerShiftTracker />);
+    </script>
+</body>
+</html>
