@@ -4,25 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>排班管理系統</title>
-    <!-- 強制瀏覽器使用 UTF-8 編碼，防止亂碼 -->
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     
-    <!-- 引入 React, ReactDOM, Babel, TailwindCSS -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
     <style>
-        /* 基本樣式設定 */
-        body { 
-            background-color: #f8fafc; 
-            font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", "Segoe UI", Roboto, sans-serif; 
-            -webkit-tap-highlight-color: transparent; 
-        }
+        body { background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
         .animate-in { animation: fadeIn 0.3s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
-        html, body { overscroll-behavior-y: none; } /* 防止手機下拉重整 */
+        html, body { overscroll-behavior-y: none; }
     </style>
 </head>
 <body>
@@ -43,14 +36,11 @@
             RotateCcw: (p) => <Icon {...p} path={<><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></>} />,
             Plus: (p) => <Icon {...p} path={<><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></>} />,
             Trash2: (p) => <Icon {...p} path={<><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></>} />,
-            Users: (p) => <Icon {...p} path={<><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></>} />
+            Users: (p) => <Icon {...p} path={<><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></>} />,
+            Refresh: (p) => <Icon {...p} path={<><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></>} />
         };
 
-        // =================================================================
-        // ▼▼▼ 資料設定區 (請在這裡填入您的員工資料，主管打開就會看到這些) ▼▼▼
-        // role (職位): 'eng' 是工程師, 'op' 是員級
-        // dept (部門): 輸入中文，例如 '一課', '二課'
-        
+        // ▼▼▼ 最新資料設定區 (V10) ▼▼▼
         const DEFAULT_DATA = [
             { id: 1, name: '葉貞成', startDateStr: '2026-01-18', role: 'eng', dept: '防銲無塵室' },
             { id: 2, name: '林健業', startDateStr: '2026-01-19', role: 'eng', dept: '防銲外場' },
@@ -62,35 +52,37 @@
             { id: 8, name: '蔡宗翰', startDateStr: '2026-01-20', role: 'op', dept: '表面處理' },
             { id: 9, name: '陳婕妮', startDateStr: '2026-01-18', role: 'op', dept: '量測車間' },
         ];
-        
-        // ▲▲▲ 資料設定區 ▲▲▲
-        // =================================================================
+        // ▲▲▲ 最新資料設定區 ▲▲▲
 
         const EngineerShiftTracker = () => {
-            // 初始化數據：優先讀取手機紀錄，如果沒有紀錄(新手機/新瀏覽器)，就讀取上面的 DEFAULT_DATA
+            // ★★★ 關鍵：Storage Key 改為 v10，強制讀取新資料 ★★★
             const [engineers, setEngineers] = React.useState(() => {
-                const saved = localStorage.getItem('shift_data_v8');
+                const saved = localStorage.getItem('shift_data_v10');
                 if (saved) {
                     try { return JSON.parse(saved); } catch (e) { console.error(e); }
                 }
                 return DEFAULT_DATA;
             });
 
-            // 狀態管理
             const [isEditing, setIsEditing] = React.useState(null);
             const [viewDate, setViewDate] = React.useState(new Date());
-            const [filterRole, setFilterRole] = React.useState('eng'); // 預設顯示工程師
+            const [filterRole, setFilterRole] = React.useState('eng'); 
             const [deleteConfirmId, setDeleteConfirmId] = React.useState(null);
+            const [editForm, setEditForm] = React.useState({ name: '', role: 'eng', dept: '', year: 2026, month: 1, day: 1 });
 
-            // 編輯表單暫存
-            const [editForm, setEditForm] = React.useState({ name: '', role: 'eng', dept: '', year: 2024, month: 1, day: 1 });
-
-            // 當資料有變動時，自動存入手機記憶體
             React.useEffect(() => {
-                localStorage.setItem('shift_data_v8', JSON.stringify(engineers));
+                localStorage.setItem('shift_data_v10', JSON.stringify(engineers));
             }, [engineers]);
 
-            // --- 日期與班表計算 ---
+            // --- 強制重置功能 ---
+            const handleForceReset = () => {
+                if(confirm('確定要強制載入「葉貞成、林健業...」這份最新名單嗎？\n(目前的修改將會被覆蓋)')) {
+                    setEngineers(DEFAULT_DATA);
+                    localStorage.setItem('shift_data_v10', JSON.stringify(DEFAULT_DATA));
+                    alert('已更新為最新名單！');
+                }
+            };
+
             const parseDateString = (dateStr) => {
                 if (!dateStr) return null;
                 const [y, m, d] = dateStr.split('-').map(Number);
@@ -104,8 +96,6 @@
                 target.setHours(0, 0, 0, 0); 
                 const diffTime = target.getTime() - start.getTime();
                 const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-                
-                // 做4休2循環邏輯
                 const cycleDay = ((diffDays % 6) + 6) % 6;
                 return cycleDay < 4 
                     ? { type: 'work', day: cycleDay + 1, label: `上班 D${cycleDay + 1}` }
@@ -115,7 +105,6 @@
             const today = new Date();
             const currentYear = today.getFullYear();
 
-            // --- 按鈕操作邏輯 ---
             const handleAdd = () => {
                 const newId = Date.now();
                 const newEng = { id: newId, name: '新人員', startDateStr: '', role: filterRole === 'all' ? 'eng' : filterRole, dept: '一課' };
@@ -149,14 +138,9 @@
                 setIsEditing(null);
             };
 
-            // --- 篩選與分組邏輯 ---
-            // 根據上方 Tab 篩選人員
             const filteredData = engineers.filter(e => filterRole === 'all' || (e.role || 'eng') === filterRole);
-            
-            // 找出所有出現過的部門並排序
             const departments = [...new Set(filteredData.map(e => e.dept || '未分類'))].sort();
 
-            // --- 週曆邏輯 ---
             const getCurrentWeekDays = () => {
                 const start = new Date(viewDate);
                 const day = start.getDay(); 
@@ -171,7 +155,6 @@
             const weekRangeStr = `${weekDays[0].getMonth()+1}/${weekDays[0].getDate()} ~ ${weekDays[6].getMonth()+1}/${weekDays[6].getDate()}`;
             const isToday = (d) => d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
             
-            // 下拉選單用
             const years = [currentYear - 1, currentYear, currentYear + 1];
             const months = Array.from({length: 12}, (_, i) => i + 1);
             const daysInMonth = new Date(editForm.year, editForm.month, 0).getDate();
@@ -179,16 +162,20 @@
 
             return (
                 <div className="min-h-screen pb-24 max-w-md mx-auto">
-                    {/* 上方導覽列 */}
                     <div className="bg-white p-4 shadow-sm sticky top-0 z-30 border-b border-slate-100">
                         <div className="flex justify-between items-center mb-4">
                             <h1 className="text-lg font-bold flex items-center gap-2 text-slate-800">
-                                <Icons.Users className="text-blue-600" /> 排班管理
+                                <Icons.Users className="text-blue-600" /> 排班管理 <span className="text-xs text-slate-400 font-normal">(最新版)</span>
                             </h1>
-                            <button onClick={() => setViewDate(new Date())} className="text-xs flex items-center gap-1 bg-slate-100 px-3 py-1.5 rounded-full text-slate-600 font-medium active:scale-95 transition-transform"><Icons.RotateCcw size={12}/> 回今天</button>
+                            <div className="flex gap-2">
+                                {/* ★★★ 強制重置按鈕 ★★★ */}
+                                <button onClick={handleForceReset} className="text-xs flex items-center gap-1 bg-red-50 px-2 py-1 rounded-md text-red-600 border border-red-200 hover:bg-red-100 active:scale-95 transition-transform" title="如果名單沒更新請點我">
+                                    <Icons.Refresh size={12}/> 重置名單
+                                </button>
+                                <button onClick={() => setViewDate(new Date())} className="text-xs flex items-center gap-1 bg-slate-100 px-3 py-1.5 rounded-full text-slate-600 font-medium active:scale-95 transition-transform"><Icons.RotateCcw size={12}/> 回今天</button>
+                            </div>
                         </div>
 
-                        {/* 職位篩選按鈕 (Tabs) */}
                         <div className="flex p-1 bg-slate-100 rounded-xl mb-3">
                             {[
                                 { id: 'eng', label: '工程師' },
@@ -205,7 +192,6 @@
                             ))}
                         </div>
 
-                        {/* 週導航 (上一週/下一週) */}
                         <div className="flex items-center justify-between bg-slate-50 rounded-xl p-1 select-none border border-slate-200">
                             <button onClick={() => {const d=new Date(viewDate);d.setDate(d.getDate()-7);setViewDate(d)}} className="p-2 hover:bg-white rounded-lg text-slate-500 hover:text-blue-600"><Icons.ChevronLeft /></button>
                             <div className="text-sm font-bold text-slate-700 font-mono">{weekRangeStr}</div>
@@ -213,11 +199,9 @@
                         </div>
                     </div>
 
-                    {/* 主要內容區 */}
                     <div className="p-4 space-y-6">
                         {departments.map(dept => (
                             <div key={dept}>
-                                {/* 部門分隔標題 */}
                                 <div className="flex items-center gap-2 mb-3 px-1">
                                     <div className="h-4 w-1 bg-blue-500 rounded-full"></div>
                                     <h3 className="font-bold text-slate-700">{dept}</h3>
@@ -228,7 +212,6 @@
                                         const todayStatus = getShiftStatus(eng.startDateStr, today);
                                         const isTodayWork = todayStatus?.type === 'work';
 
-                                        // --- 編輯模式 ---
                                         if (isEditing === eng.id) {
                                             return (
                                                 <div key={eng.id} className="bg-white p-5 rounded-2xl shadow-xl border-2 border-blue-500 animate-in relative z-20">
@@ -276,13 +259,10 @@
                                             );
                                         }
 
-                                        // --- 顯示模式 ---
                                         return (
                                             <div key={eng.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                                                {/* 上半部：人員資訊 & 今日狀態 */}
                                                 <div className="p-3 flex items-center justify-between relative z-10">
                                                     <div className="flex items-center gap-3">
-                                                        {/* 大頭貼 (取名字第一個字) */}
                                                         <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-sm ${eng.role === 'eng' ? 'bg-blue-400' : 'bg-slate-400'}`}>
                                                             {eng.name[0]}
                                                         </div>
@@ -302,7 +282,6 @@
                                                         </div>
                                                     </div>
                                                     
-                                                    {/* 今日狀態大圖示 */}
                                                     {eng.startDateStr && (
                                                         <div className={`flex flex-col items-center px-3 py-1 rounded-lg ${isTodayWork ? 'bg-emerald-50' : 'bg-orange-50'}`}>
                                                             <span className={`text-xl font-black ${isTodayWork ? 'text-emerald-500' : 'text-orange-400'}`}>{todayStatus.day}</span>
@@ -311,7 +290,6 @@
                                                     )}
                                                 </div>
 
-                                                {/* 下半部：週曆條 */}
                                                 {eng.startDateStr && (
                                                     <div className="bg-slate-50/50 px-2 py-2 border-t border-slate-100">
                                                         <div className="grid grid-cols-7 gap-1">
@@ -337,7 +315,6 @@
                         ))}
                     </div>
 
-                    {/* 右下角新增按鈕 */}
                     <button onClick={handleAdd} className="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg shadow-blue-600/30 flex items-center justify-center hover:bg-blue-700 hover:scale-105 transition-all active:scale-95 z-40">
                         <Icons.Plus size={28} />
                     </button>
